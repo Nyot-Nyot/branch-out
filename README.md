@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Akar Budaya - Sistem Repositori Digital Silsilah Keluarga
 
 Sistem ini dirancang sebagai repositori digital interaktif untuk mencatat **silsilah keluarga dan riwayat komunitas** dalam suatu kampung adat di Indonesia. 
