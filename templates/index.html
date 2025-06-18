@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Akar Budaya - Sistem Silsilah Keluarga</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        .family-member {
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .family-member:hover {
+            transform: scale(1.05);
+            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
+        }
+        .timeline-item {
+            transition: all 0.3s ease;
+        }
+        .timeline-item:hover {
+            transform: translateY(-5px);
+        }
+        .connector {
+            position: relative;
+        }
+        .connector::after {
+            content: '';
+            position: absolute;
+            width: 2px;
+            height: 20px;
+            background-color: #6b7280;
+            bottom: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        .tree-container {
+            overflow: auto;
+            background-color: #f8fafc;
+            border-radius: 0.5rem;
+        }
+        @media (max-width: 768px) {
+            .tree-container {
+                overflow-x: auto;
+            }
+        }        .modal {
+            display: none;
+        }
+        .modal.active {
+            display: flex !important;
+        }
+        .family-unit {
+            position: relative;
+        }
+        .couple-container.has-children::after {
+            content: '';
+            position: absolute;
+            left: 50%;
+            bottom: -2rem; /* 32px */
+            transform: translateX(-50%);
+            width: 2px;
+            height: 2rem; /* 32px */
+            background-color: #9ca3af; /* gray-400 */
+        }
+        .spouse-connector {
+            border-top: 2px solid #9ca3af;
+            width: 2rem; /* 32px */
+            margin-top: 2.5rem; /* Align with middle of the card */
+        }
+        .children-container {
+            padding-top: 2rem; /* 32px, same as connector height */
+        }
+        .children-container::before {
+            content: '';
+            position: absolute;
+            left: 10%;
+            right: 10%;
+            top: 0;
+            height: 2px;
+            background-color: #9ca3af; /* gray-400 */
+        }
+        /* Hide horizontal bar if only one child */
+        .children-container:has(> :nth-child(1):last-child)::before {
+            display: none;
+        }
+        .family-unit.is-child::before {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: -2rem; /* 32px, should match children-container padding-top */
+            transform: translateX(-50%);
+            width: 2px;
+            height: 2rem; /* 32px */
+            background-color: #9ca3af; /* gray-400 */
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <header class="mb-8">
+            <h1 class="text-4xl font-bold text-center text-indigo-700 mb-2">Akar Budaya</h1>
+            <p class="text-center text-gray-600">Sistem Repositori Digital Silsilah Keluarga dan Riwayat Komunitas</p>
+        </header>
+
+        <!-- Statistics Dashboard -->
+        <section id="dashboard" class="mb-8">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <div class="flex items-center">
+                        <div class="p-3 rounded-full bg-blue-500 text-white">
+                            <i class="fas fa-users text-xl"></i>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-gray-500 text-sm">Total Anggota</p>
+                            <p class="text-2xl font-semibold" id="total-people">0</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <div class="flex items-center">
+                        <div class="p-3 rounded-full bg-green-500 text-white">
+                            <i class="fas fa-heart text-xl"></i>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-gray-500 text-sm">Total Hubungan</p>
+                            <p class="text-2xl font-semibold" id="total-relationships">0</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <div class="flex items-center">
+                        <div class="p-3 rounded-full bg-purple-500 text-white">
+                            <i class="fas fa-calendar text-xl"></i>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-gray-500 text-sm">Total Peristiwa</p>
+                            <p class="text-2xl font-semibold" id="total-events">0</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <div class="flex items-center">
+                        <div class="p-3 rounded-full bg-yellow-500 text-white">
+                            <i class="fas fa-chart-pie text-xl"></i>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-gray-500 text-sm">Gender</p>
+                            <p class="text-sm" id="gender-stats">L: 0, P: 0</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Navigation -->        <nav class="flex justify-between items-center mb-8 bg-white p-4 rounded-lg shadow-sm">
+            <div class="flex space-x-4">
+                <button id="family-tree-tab" class="px-4 py-2 rounded-lg bg-indigo-600 text-white">
+                    <i class="fas fa-sitemap mr-2"></i>Silsilah Keluarga
+                </button>
+                <button id="timeline-tab" class="px-4 py-2 rounded-lg bg-gray-200 text-gray-700">
+                    <i class="fas fa-clock mr-2"></i>Timeline Peristiwa
+                </button>
+                <button id="add-member-tab" class="px-4 py-2 rounded-lg bg-gray-200 text-gray-700">
+                    <i class="fas fa-user-plus mr-2"></i>Tambah Anggota
+                </button>
+                <button id="add-event-tab" class="px-4 py-2 rounded-lg bg-gray-200 text-gray-700">
+                    <i class="fas fa-calendar-plus mr-2"></i>Tambah Peristiwa
+                </button>
+            </div>
+            <div class="flex space-x-2">
+                <button id="debug-test-btn" class="px-3 py-1 rounded-lg bg-red-500 text-white text-sm" onclick="testDebug()">
+                    <i class="fas fa-bug mr-1"></i>Debug Test
+                </button>
+                <button id="force-reload-btn" class="px-3 py-1 rounded-lg bg-green-500 text-white text-sm" onclick="forceReload()">
+                    <i class="fas fa-refresh mr-1"></i>Force Reload
+                </button>
+            </div>
+        </nav>
+
+        <!-- Family Tree Section -->
+        <section id="family-tree-section" class="mb-12">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-semibold text-gray-800">Silsilah Keluarga</h2>
+                <div class="flex space-x-2">
+                    <button id="zoom-in" class="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600">
+                        <i class="fas fa-search-plus"></i>
+                    </button>
+                    <button id="zoom-out" class="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600">
+                        <i class="fas fa-search-minus"></i>
+                    </button>
+                    <button id="center-tree" class="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600">
+                        <i class="fas fa-crosshairs"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="tree-container p-4 bg-white rounded-lg shadow-md" style="height: 600px;">
+                <div id="tree" class="h-full overflow-auto"></div>
+            </div>
+            
+            <div class="flex mt-4">
+                <div id="member-details" class="hidden w-1/3 bg-white p-4 rounded-lg shadow-md mr-4">
+                    <h3 class="font-semibold text-lg mb-2">Detail Anggota</h3>
+                    <p><strong>Nama:</strong> <span id="detail-name"></span></p>
+                    <p><strong>Nama Adat:</strong> <span id="detail-native-name"></span></p>
+                    <p><strong>Tanggal Lahir:</strong> <span id="detail-birth"></span></p>
+                    <p><strong>Tanggal Wafat:</strong> <span id="detail-death"></span></p>
+                    <p><strong>Jenis Kelamin:</strong> <span id="detail-gender"></span></p>
+                    <p><strong>Suku:</strong> <span id="detail-suku"></span></p>
+                    <p><strong>Tempat Lahir:</strong> <span id="detail-birth-place"></span></p>
+                    <p><strong>Pendidikan:</strong> <span id="detail-education"></span></p>
+                    <div class="mt-2">
+                        <strong>Pekerjaan:</strong>
+                        <ul id="detail-occupations" class="list-disc ml-4"></ul>
+                    </div>
+                    <div class="mt-2">
+                        <strong>Peran Adat:</strong>
+                        <ul id="detail-roles" class="list-disc ml-4"></ul>
+                    </div>
+                    <div class="mt-2">
+                        <strong>Biografi:</strong>
+                        <p id="detail-bio" class="text-sm text-gray-600 mt-1"></p>
+                    </div>
+                    <div class="mt-4 flex space-x-2">
+                        <button id="edit-member-btn" class="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600">
+                            <i class="fas fa-edit"></i> Edit
+                        </button>
+                        <button id="delete-member-btn" class="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600">
+                            <i class="fas fa-trash"></i> Hapus
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Timeline Section -->
+        <section id="timeline-section" class="hidden mb-12">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Timeline Peristiwa Adat dan Komunitas</h2>
+            
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <div id="timeline" class="flex overflow-x-auto space-x-4 pb-4">
+                    <!-- Timeline events will be populated here -->
+                </div>
+                
+                <div id="event-details" class="hidden mt-6 p-4 border-t">
+                    <h3 class="font-semibold text-lg mb-2">Detail Peristiwa</h3>
+                    <p><strong>Nama Peristiwa:</strong> <span id="event-title"></span></p>
+                    <p><strong>Jenis:</strong> <span id="event-type"></span></p>
+                    <p><strong>Tanggal:</strong> <span id="event-date"></span></p>
+                    <p><strong>Lokasi:</strong> <span id="event-location"></span></p>
+                    <p><strong>Deskripsi:</strong> <span id="event-description"></span></p>
+                    <div class="mt-2">
+                        <strong>Partisipan:</strong>
+                        <div id="event-people" class="mt-1"></div>
+                    </div>
+                    <div class="mt-4 flex space-x-2">
+                        <button id="edit-event-btn" class="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600">
+                            <i class="fas fa-edit"></i> Edit
+                        </button>
+                        <button id="delete-event-btn" class="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600">
+                            <i class="fas fa-trash"></i> Hapus
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Add Member Section -->
+        <section id="add-member-section" class="hidden mb-12">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Tambah Anggota Keluarga</h2>
+            
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <form id="add-member-form">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Nama Lengkap *</label>
+                            <input type="text" id="member-name" required class="w-full p-2 border border-gray-300 rounded-md">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Nama Adat</label>
+                            <input type="text" id="member-native-name" class="w-full p-2 border border-gray-300 rounded-md">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Jenis Kelamin *</label>
+                            <select id="member-gender" required class="w-full p-2 border border-gray-300 rounded-md">
+                                <option value="">Pilih Jenis Kelamin</option>
+                                <option value="male">Laki-laki</option>
+                                <option value="female">Perempuan</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Suku</label>
+                            <input type="text" id="member-suku" class="w-full p-2 border border-gray-300 rounded-md">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Tanggal Lahir</label>
+                            <input type="date" id="member-birth" class="w-full p-2 border border-gray-300 rounded-md">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Tanggal Wafat</label>
+                            <input type="date" id="member-death" class="w-full p-2 border border-gray-300 rounded-md">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Tempat Lahir</label>
+                            <input type="text" id="member-birth-place" class="w-full p-2 border border-gray-300 rounded-md">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Tingkat Pendidikan</label>
+                            <input type="text" id="member-education" class="w-full p-2 border border-gray-300 rounded-md">
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Pekerjaan (pisahkan dengan koma)</label>
+                            <input type="text" id="member-occupations" class="w-full p-2 border border-gray-300 rounded-md" placeholder="Contoh: Petani, Pedagang">
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Biografi</label>
+                            <textarea id="member-bio" rows="3" class="w-full p-2 border border-gray-300 rounded-md"></textarea>
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Catatan</label>
+                            <textarea id="member-notes" rows="2" class="w-full p-2 border border-gray-300 rounded-md"></textarea>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-6">
+                        <button type="submit" class="px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">
+                            <i class="fas fa-save mr-2"></i>Simpan Anggota
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <!-- Add Event Section -->
+        <section id="add-event-section" class="hidden mb-12">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Tambah Peristiwa Adat/Komunitas</h2>
+            
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <form id="add-event-form">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Nama Peristiwa *</label>
+                            <input type="text" id="event-title-input" required class="w-full p-2 border border-gray-300 rounded-md">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Jenis Peristiwa *</label>
+                            <select id="event-type-input" required class="w-full p-2 border border-gray-300 rounded-md">
+                                <option value="">Pilih Jenis Peristiwa</option>
+                                <option value="upacara_adat">Upacara Adat</option>
+                                <option value="pernikahan">Pernikahan</option>
+                                <option value="kelahiran">Kelahiran</option>
+                                <option value="kematian">Kematian</option>
+                                <option value="musyawarah">Musyawarah</option>
+                                <option value="peringatan">Peringatan</option>
+                                <option value="lainnya">Lainnya</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Tanggal *</label>
+                            <input type="date" id="event-date-input" required class="w-full p-2 border border-gray-300 rounded-md">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Lokasi</label>
+                            <input type="text" id="event-location-input" class="w-full p-2 border border-gray-300 rounded-md">
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Deskripsi</label>
+                            <textarea id="event-description-input" rows="3" class="w-full p-2 border border-gray-300 rounded-md"></textarea>
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Partisipan</label>
+                            <div id="people-checkboxes" class="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-48 overflow-y-auto border border-gray-300 rounded-md p-2">
+                                <!-- Checkboxes will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-6">
+                        <button type="submit" class="px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">
+                            <i class="fas fa-save mr-2"></i>Simpan Peristiwa
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </section>
+    </div>    <!-- Modal for Add Relationship -->
+    <div id="relationship-modal" class="modal fixed inset-0 bg-gray-600 bg-opacity-50 hidden items-center justify-center z-50" style="display: none;">
+        <div class="bg-white p-6 rounded-lg shadow-lg w-96">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold">Tambah Hubungan</h3>
+                <button type="button" id="close-relationship-modal" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <form id="add-relationship-form">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Pilih Anggota Kedua</label>
+                    <select id="relationship-person2" required class="w-full p-2 border border-gray-300 rounded-md">
+                        <option value="">Pilih Anggota</option>
+                    </select>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Jenis Hubungan</label>
+                    <select id="relationship-type" required class="w-full p-2 border border-gray-300 rounded-md">
+                        <option value="">Pilih Hubungan</option>
+                        <option value="spouse">Pasangan</option>
+                        <option value="parent">Orang Tua</option>
+                        <option value="child">Anak</option>
+                        <option value="sibling">Saudara</option>
+                    </select>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Tanggal Mulai</label>
+                    <input type="date" id="relationship-start" class="w-full p-2 border border-gray-300 rounded-md">
+                </div>
+                <div class="flex justify-end space-x-2">
+                    <button type="button" id="cancel-relationship" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-md">Simpan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
